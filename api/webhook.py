@@ -12,7 +12,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'Telegram Bot Webhook is working!')
+        self.wfile.write(b'Telegram Bot Webhook is working УРА!')
 
     def do_POST(self):
         try:
