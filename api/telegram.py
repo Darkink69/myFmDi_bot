@@ -6,7 +6,7 @@ import logging
 import ssl
 
 # Настройки
-TOKEN = "6082546372:AAHM33fkvArJpe8wU5IQeg0L4jOGNpHJe2Q"
+TOKEN = "8315097557:AAH4xALNwTxjecuAxzyUbCdLrsDBxi2tWQc"
 WEBHOOK_URL = "https://my-fm-di-bot.vercel.app/"  # Ваш публичный HTTPS-адрес
 PORT = 8443
 # CERT_PATH = "/path/to/cert.pem"  # Путь к SSL-сертификату
