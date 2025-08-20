@@ -1,47 +1,48 @@
-from flask import Flask, request, jsonify
+from http.server import BaseHTTPRequestHandler
+import json
 import os
-import logging
 import requests
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, \
-    CallbackQueryHandler, ContextTypes
+import logging
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-app = Flask(__name__)
 
 TOKEN = os.getenv('BOT_TOKEN')
 IMAGE_URL = "https://9qhr1l4qpuouftdm.public.blob.vercel-storage.com/assets/slipper.png"
 
 
-def get_keyboard():
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Перейти в приложение", callback_data='app')],
-        [InlineKeyboardButton("Подробнее", callback_data='info')]
-    ])
+def get_keyboard_json():
+    """Создает клавиатуру в формате JSON"""
+    return {
+        "inline_keyboard": [
+            [{"text": "Перейти в приложение", "callback_data": "app"}],
+            [{"text": "Подробнее", "callback_data": "info"}]
+        ]
+    }
 
 
 def send_telegram_message(chat_id, text, photo_url=None, reply_markup=None):
-    """Отправка сообщения через Telegram API"""
-    if photo_url:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
-        data = {
-            'chat_id': chat_id,
-            'photo': photo_url,
-            'caption': text,
-            'reply_markup': reply_markup.to_json() if reply_markup else None
-        }
-    else:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        data = {
-            'chat_id': chat_id,
-            'text': text,
-            'reply_markup': reply_markup.to_json() if reply_markup else None
-        }
-
+    """Отправляет сообщение через Telegram API"""
     try:
+        if photo_url:
+            url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+            data = {
+                'chat_id': chat_id,
+                'photo': photo_url,
+                'caption': text,
+                'reply_markup': json.dumps(
+                    reply_markup) if reply_markup else None
+            }
+        else:
+            url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+            data = {
+                'chat_id': chat_id,
+                'text': text,
+                'reply_markup': json.dumps(
+                    reply_markup) if reply_markup else None
+            }
+
         response = requests.post(url, data=data, timeout=10)
         return response.json()
     except Exception as e:
@@ -49,52 +50,72 @@ def send_telegram_message(chat_id, text, photo_url=None, reply_markup=None):
         return None
 
 
-@app.route('/api/webhook', methods=['POST', 'GET'])
-def webhook_handler():
-    if request.method == 'POST':
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Telegram Bot Webhook is working! ✅')
+
+    def do_POST(self):
         try:
-            data = request.get_json()
+            # Читаем данные запроса
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+
             logger.info(f"Received update: {data}")
 
-            update = Update.de_json(data, None)
+            # Обрабатываем сообщение
+            if 'message' in data:
+                message = data['message']
+                chat_id = message['chat']['id']
+                text = message.get('text', '')
 
-            if update.message:
-                chat_id = update.message.chat.id
-                text = update.message.text
+                keyboard = get_keyboard_json()
 
-                if text == '/start':
-                    # Отправляем фото с кнопками
-                    keyboard = get_keyboard()
-                    send_telegram_message(chat_id,
-                                          f"Привет, {update.message.from_user.first_name}!",
+                if text.startswith('/start'):
+                    # Команда /start
+                    first_name = message['from'].get('first_name', 'друг')
+                    send_telegram_message(chat_id, f"Привет, {first_name}!",
                                           IMAGE_URL, keyboard)
                 else:
-                    # Отправляем ответ на сообщение
-                    keyboard = get_keyboard()
+                    # Обычное сообщение
                     send_telegram_message(chat_id, f"Привет, {text}!",
                                           IMAGE_URL, keyboard)
 
-            elif update.callback_query:
-                # Обработка нажатий кнопок
-                chat_id = update.callback_query.message.chat.id
-                data = update.callback_query.data
+            # Обрабатываем callback от кнопок
+            elif 'callback_query' in data:
+                callback = data['callback_query']
+                chat_id = callback['message']['chat']['id']
+                callback_data = callback['data']
 
-                if data == 'app':
+                # Отвечаем на нажатие кнопки
+                answer_url = f"https://api.telegram.org/bot{TOKEN}/answerCallbackQuery"
+                requests.post(answer_url, data={
+                    'callback_query_id': callback['id']
+                })
+
+                # Отправляем сообщение в зависимости от кнопки
+                if callback_data == 'app':
                     send_telegram_message(chat_id,
                                           "Функция 'Перейти в приложение' в разработке 🛠️")
-                elif data == 'info':
+                elif callback_data == 'info':
                     send_telegram_message(chat_id,
                                           "Здесь будет подробная информация ℹ️")
 
-            return jsonify({"status": "ok"})
+            # Успешный ответ
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({"status": "ok"})
+            self.wfile.write(response.encode('utf-8'))
 
         except Exception as e:
             logger.error(f"Error: {e}")
-            return jsonify({"status": "error", "message": str(e)})
-
-    return "Telegram Bot Webhook is working! ✅", 200
-
-
-def handler(req):
-    with app.app_context():
-        return app.full_dispatch_request()
+            # Всегда возвращаем 200 для Telegram
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({"status": "error", "message": str(e)})
+            self.wfile.write(response.encode('utf-8'))
