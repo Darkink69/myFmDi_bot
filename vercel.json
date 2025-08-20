@@ -1,14 +1,16 @@
 {
   "functions": {
-    "api/webhook.py": {
-      "maxDuration": 30,
-      "runtime": "@vercel/python@3.0.0"
+    "api/*.py": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/webhook",
-      "destination": "/api/webhook"
+      "destination": "/api/index.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONPATH": "/var/task"
+  }
 }
