@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import os
 import logging
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, \
     CallbackQueryHandler, ContextTypes
@@ -15,8 +16,23 @@ app = Flask(__name__)
 TOKEN = os.getenv('BOT_TOKEN')
 IMAGE_URL = "https://9qhr1l4qpuouftdm.public.blob.vercel-storage.com/assets/slipper.png"
 
-# Инициализация приложения Telegram
-application = Application.builder().token(TOKEN).build()
+# Глобальная инициализация приложения
+application = None
+
+
+def init_bot():
+    global application
+    if application is None:
+        application = Application.builder().token(TOKEN).build()
+
+        # Регистрация обработчиков
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        application.add_handler(CallbackQueryHandler(button_click))
+
+        # Запуск обработки обновлений
+        application.initialize()
 
 
 def get_keyboard():
@@ -28,6 +44,7 @@ def get_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    logger.info(f"Processing start command for user {user.id}")
     await update.message.reply_photo(
         photo=IMAGE_URL,
         caption=f"Привет, {user.first_name}!",
@@ -37,6 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    logger.info(f"Processing message from user {user.id}")
     await update.message.reply_photo(
         photo=IMAGE_URL,
         caption=f"Привет, {update.message.text}!",
@@ -55,17 +73,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Здесь будет подробная информация ℹ️")
 
 
-# Регистрация обработчиков
-application.add_handler(CommandHandler("start", start))
-application.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-application.add_handler(CallbackQueryHandler(button_click))
-
-
 @app.route('/api/webhook', methods=['POST', 'GET'])
 def webhook_handler():
     if request.method == 'POST':
         try:
+            # Инициализируем бота при первом вызове
+            init_bot()
+
             # Получаем данные от Telegram
             data = request.get_json()
             logger.info(f"Received update: {data}")
@@ -73,21 +87,16 @@ def webhook_handler():
             # Создаем объект Update
             update = Update.de_json(data, application.bot)
 
-            # Асинхронная обработка
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(application.process_update(update))
-            loop.close()
+            # Добавляем обновление в очередь синхронно
+            application.update_queue.put_nowait(update)
+            logger.info(f"Update added to queue for processing")
 
             return jsonify({"status": "ok"})
 
         except Exception as e:
             logger.error(f"Error processing webhook: {e}")
-            # Всегда возвращаем 200 Telegram!
             return jsonify({"status": "error", "message": str(e)})
 
-    # GET запрос - для проверки работы
     return "Telegram Bot Webhook is working! ✅", 200
 
 
