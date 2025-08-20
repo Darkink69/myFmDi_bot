@@ -7,9 +7,9 @@ import ssl
 
 # Настройки
 TOKEN = "6082546372:AAHM33fkvArJpe8wU5IQeg0L4jOGNpHJe2Q"
-WEBHOOK_URL = "https://yourdomain.com/webhook"  # Ваш публичный HTTPS-адрес
+WEBHOOK_URL = "https://my-fm-di-bot.vercel.app/"  # Ваш публичный HTTPS-адрес
 PORT = 8443
-CERT_PATH = "/path/to/cert.pem"  # Путь к SSL-сертификату
+# CERT_PATH = "/path/to/cert.pem"  # Путь к SSL-сертификату
 
 # Настройка логирования
 logging.basicConfig(
@@ -66,7 +66,7 @@ def main():
 
     # Настройка Webhook
     context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    context.load_cert_chain(CERT_PATH)
+    # context.load_cert_chain(CERT_PATH)
 
     logger.info("Starting webhook...")
     app.run_webhook(
@@ -74,7 +74,7 @@ def main():
         port=PORT,
         url_path=TOKEN,
         webhook_url=WEBHOOK_URL,
-        ssl_context=context
+        # ssl_context=context
     )
 
 
