@@ -5,26 +5,34 @@ import secrets
 from flask import Flask, request, Response
 
 # Настройка переменных окружения
-TOKEN = os.getenv('TELEGRAM_TOKEN', 'YOUR_BOT_TOKEN')
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+if not TOKEN:
+    raise ValueError("TELEGRAM_TOKEN environment variable is required")
+
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 IMAGE_URL = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
 
 app = Flask(__name__)
 
-# Глобальная переменная для секретного токена (так как переменные окружения в Vercel могут быть проблематичны)
-WEBHOOK_SECRET = None
+# Глобальная переменная для секретного токена
+# В production используйте базу данных или кэш
+_WEBHOOK_SECRET = None
+
 
 def get_webhook_secret():
     """Получение или создание секретного токена"""
-    global WEBHOOK_SECRET
-    if WEBHOOK_SECRET is None:
+    global _WEBHOOK_SECRET
+    if _WEBHOOK_SECRET is None:
         # Пытаемся получить из переменных окружения
-        WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET_TOKEN')
-        if not WEBHOOK_SECRET:
+        env_secret = os.getenv('WEBHOOK_SECRET_TOKEN')
+        if env_secret:
+            _WEBHOOK_SECRET = env_secret
+            print("Using webhook secret from environment")
+        else:
             # Генерируем новый токен
-            WEBHOOK_SECRET = secrets.token_urlsafe(32)
-            print(f"Generated new webhook secret: {WEBHOOK_SECRET}")
-    return WEBHOOK_SECRET
+            _WEBHOOK_SECRET = secrets.token_urlsafe(32)
+            print(f"Generated new webhook secret: {_WEBHOOK_SECRET}")
+    return _WEBHOOK_SECRET
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -37,10 +45,11 @@ def send_message(chat_id, text, reply_markup=None):
         'disable_web_page_preview': True
     }
     if reply_markup:
-        payload['reply_markup'] = reply_markup
+        payload['reply_markup'] = json.dumps(reply_markup)
 
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
         return response.json()
     except Exception as e:
         print(f"Error sending message: {e}")
@@ -58,10 +67,11 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
         payload['caption'] = caption
         payload['parse_mode'] = 'HTML'
     if reply_markup:
-        payload['reply_markup'] = reply_markup
+        payload['reply_markup'] = json.dumps(reply_markup)
 
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
         return response.json()
     except Exception as e:
         print(f"Error sending photo: {e}")
@@ -71,7 +81,8 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
 def delete_webhook():
     """Удаление вебхука"""
     try:
-        response = requests.get(f"{BASE_URL}/deleteWebhook", timeout=15)
+        response = requests.get(f"{BASE_URL}/deleteWebhook", timeout=10)
+        response.raise_for_status()
         return response.json()
     except Exception as e:
         print(f"Error deleting webhook: {e}")
@@ -81,20 +92,25 @@ def delete_webhook():
 def set_webhook():
     """Установка вебхука с секретом"""
     try:
-        # URL для вебхука
+        secret_token = get_webhook_secret()
+
+        # Определяем URL для вебхука
         vercel_url = os.getenv('VERCEL_URL')
         if vercel_url:
             webhook_url = f"https://{vercel_url}/api/webhook"
         else:
-            # Для локального тестирования
-            webhook_url = "https://your-vercel-project.vercel.app/api/webhook"
+            # Если VERCEL_URL не установлен, используем заглушку
+            webhook_url = "https://your-project.vercel.app/api/webhook"
 
-        # Устанавливаем вебхук с секретом
+        print(f"Setting webhook to: {webhook_url}")
+        print(f"Using secret token: {secret_token}")
+
+        # Устанавливаем вебхук
         response = requests.post(
             f"{BASE_URL}/setWebhook",
             json={
                 'url': webhook_url,
-                'secret_token': WEBHOOK_SECRET,
+                'secret_token': secret_token,
                 'allowed_updates': ['message', 'callback_query'],
                 'drop_pending_updates': True
             },
@@ -102,12 +118,26 @@ def set_webhook():
         )
 
         result = response.json()
-        result['webhook_url'] = webhook_url
-        result['secret_token'] = WEBHOOK_SECRET
+        if result.get('ok'):
+            print("Webhook set successfully")
+        else:
+            print(f"Webhook setting failed: {result}")
 
         return result
+
     except Exception as e:
         print(f"Error setting webhook: {e}")
+        return {'ok': False, 'error': str(e)}
+
+
+def get_webhook_info():
+    """Получение информации о текущем вебхуке"""
+    try:
+        response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error getting webhook info: {e}")
         return None
 
 
@@ -144,42 +174,45 @@ def get_number_buttons_keyboard():
 @app.route('/')
 def index():
     return Response(
-        'Telegram Interactive Bot is running! 🤖\n\n'
-        'Send /start to begin interaction.\n'
-        'The bot uses webhook with secret token for secure communication.',
+        'Telegram Bot is running! 🤖\n\n'
+        'Endpoints:\n'
+        '- /api/set_webhook - Setup webhook\n'
+        '- /api/webhook_info - Get webhook info\n'
+        '- /api/webhook - Telegram webhook endpoint',
         mimetype='text/plain'
     ), 200
 
 
 @app.route('/api/webhook', methods=['POST'])
-def webhook():
+def webhook_handler():
+    """Основной обработчик вебхука от Telegram"""
     try:
         # Проверка секретного токена
-        secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+        incoming_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
         expected_secret = get_webhook_secret()
 
-        print(f"Received secret: {secret_token}")
+        print(f"Incoming secret: {incoming_secret}")
         print(f"Expected secret: {expected_secret}")
 
-        if secret_token != expected_secret:
-            print(
-                f"Unauthorized: expected {expected_secret}, got {secret_token}")
+        if not incoming_secret or incoming_secret != expected_secret:
+            print("Unauthorized webhook request")
             return Response('Unauthorized', status=401)
 
         # Получаем данные от Telegram
         data = request.get_json()
         if not data:
+            print("No data received")
             return Response('No data', status=400)
 
-        print(f"Received data: {json.dumps(data, indent=2)}")
+        print(
+            f"Received update: {json.dumps(data, indent=2, ensure_ascii=False)}")
 
-        # Обработка входящих сообщений
+        # Обработка сообщений
         if 'message' in data:
             message = data['message']
             chat_id = message['chat']['id']
             user_name = message['from'].get('first_name', 'Пользователь')
 
-            # Проверяем команду /start
             if 'text' in message and message['text'] == '/start':
                 caption = (
                     f"Добро пожаловать, {user_name}! 👋\n\n"
@@ -188,29 +221,26 @@ def webhook():
                 )
                 reply_markup = get_main_menu_keyboard()
                 send_photo(chat_id, IMAGE_URL, caption, reply_markup)
+                print(f"Sent welcome message to {chat_id}")
 
-        # Обработка callback-запросов от кнопок
+        # Обработка callback-запросов
         elif 'callback_query' in data:
             callback_query = data['callback_query']
             chat_id = callback_query['message']['chat']['id']
             callback_data = callback_query['data']
             user_name = callback_query['from'].get('first_name', 'Пользователь')
 
-            # Отправляем ответ на callback
+            # Ответ на callback query
             try:
                 requests.post(
                     f"{BASE_URL}/answerCallbackQuery",
-                    json={
-                        'callback_query_id': callback_query['id'],
-                        'text': 'Обработка...',
-                        'show_alert': False
-                    },
+                    json={'callback_query_id': callback_query['id']},
                     timeout=5
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"Error answering callback: {e}")
 
-            # Обработка нажатий на кнопки
+            # Обработка различных callback данных
             if callback_data == 'more_info':
                 more_info_text = (
                     f"🔍 <b>Подробная информация</b>\n\n"
@@ -220,9 +250,10 @@ def webhook():
                     f"• Callback-запросы для обработки нажатий\n"
                     f"• Динамическое изменение интерфейса\n"
                     f"• Отправка медиа-контента\n\n"
-                    f"Бot может быть расширен для любых бизнес-задач!"
+                    f"Бот может быть расширен для любых бизнес-задач!"
                 )
                 send_message(chat_id, more_info_text)
+                print(f"Sent more info to {chat_id}")
 
             elif callback_data == 'start_action':
                 numbers_text = (
@@ -232,6 +263,7 @@ def webhook():
                 )
                 reply_markup = get_number_buttons_keyboard()
                 send_message(chat_id, numbers_text, reply_markup)
+                print(f"Sent number selection to {chat_id}")
 
             elif callback_data.startswith('number_'):
                 number = callback_data.split('_')[1]
@@ -242,29 +274,37 @@ def webhook():
                     f"любая логика в зависимости от выбора пользователя."
                 )
                 send_message(chat_id, response_text)
+                print(f"Sent number response to {chat_id}")
 
         return Response('ok', status=200, mimetype='text/plain')
 
     except Exception as e:
-        print(f"Error in webhook: {e}")
-        return Response('Error', status=500)
+        print(f"Error in webhook handler: {e}")
+        return Response('Server Error', status=500)
 
 
-@app.route('/api/set_webhook', methods=['GET'])
+@app.route('/api/set_webhook', methods=['GET', 'POST'])
 def setup_webhook():
-    """Установка вебхука с секретом"""
+    """Установка вебхука"""
     try:
+        # Сначала удаляем старый вебхук
+        delete_result = delete_webhook()
+        print(f"Delete webhook result: {delete_result}")
+
         # Устанавливаем новый вебхук
         set_result = set_webhook()
 
         if set_result and set_result.get('ok'):
+            webhook_info = get_webhook_info()
             return Response(
                 json.dumps({
                     'status': 'success',
                     'message': 'Webhook установлен успешно',
-                    'webhook_info': set_result,
-                    'secret_token': get_webhook_secret()
-                }, indent=2),
+                    'set_result': set_result,
+                    'webhook_info': webhook_info,
+                    'secret_token': get_webhook_secret(),
+                    'note': 'Сохраните этот secret_token для отладки'
+                }, indent=2, ensure_ascii=False),
                 mimetype='application/json'
             ), 200
         else:
@@ -272,30 +312,42 @@ def setup_webhook():
                 json.dumps({
                     'status': 'error',
                     'message': 'Не удалось установить вебхук',
-                    'details': set_result
-                }),
+                    'details': set_result,
+                    'secret_token': get_webhook_secret()
+                }, indent=2),
                 mimetype='application/json'
             ), 500
 
     except Exception as e:
-        print(f"Error in set_webhook: {e}")
+        print(f"Error in setup_webhook: {e}")
         return Response(
-            json.dumps({'status': 'error', 'message': str(e)}),
+            json.dumps({
+                'status': 'error',
+                'message': str(e),
+                'secret_token': get_webhook_secret()
+            }),
             mimetype='application/json'
         ), 500
 
 
-@app.route('/api/get_webhook_info', methods=['GET'])
-def get_webhook_info():
+@app.route('/api/webhook_info', methods=['GET'])
+def webhook_info():
     """Получение информации о вебхуке"""
     try:
-        response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=15)
-        data = response.json()
-        data['our_secret_token'] = WEBHOOK_SECRET
+        info = get_webhook_info()
+        current_secret = get_webhook_secret()
+
+        response_data = {
+            'webhook_info': info,
+            'our_secret_token': current_secret,
+            'status': 'success'
+        }
+
         return Response(
-            json.dumps(data, indent=2),
+            json.dumps(response_data, indent=2, ensure_ascii=False),
             mimetype='application/json'
         ), 200
+
     except Exception as e:
         return Response(
             json.dumps({'status': 'error', 'message': str(e)}),
@@ -303,28 +355,36 @@ def get_webhook_info():
         ), 500
 
 
-@app.route('/api/info', methods=['GET'])
-def info():
-    """Информация о боте"""
+@app.route('/api/status', methods=['GET'])
+def status():
+    """Статус бота"""
     return Response(
         json.dumps({
-            'bot': 'Telegram Interactive Bot',
             'status': 'active',
-            'webhook_secret': WEBHOOK_SECRET,
+            'bot_token_set': bool(TOKEN),
+            'webhook_secret_set': bool(get_webhook_secret()),
             'endpoints': {
                 'webhook': '/api/webhook',
                 'set_webhook': '/api/set_webhook',
-                'get_webhook_info': '/api/get_webhook_info',
-                'info': '/api/info'
+                'webhook_info': '/api/webhook_info',
+                'status': '/api/status'
             }
         }, indent=2),
         mimetype='application/json'
     ), 200
 
 
-# Для Vercel
+# Обработчик для favicon.ico
+@app.route('/favicon.ico')
+def favicon():
+    return Response('', status=204)
+
+
+# Экспорт для Vercel
 app_instance = app
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
+    print(f"Starting server on port {port}")
+    print(f"Webhook secret: {get_webhook_secret()}")
     app.run(debug=True, host='0.0.0.0', port=port)
