@@ -7,6 +7,8 @@ from flask import Flask, request, Response
 TOKEN = os.getenv('TELEGRAM_TOKEN', 'YOUR_BOT_TOKEN')
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
+IMAGE_URL = "https://s3.twcstorage.ru/c6bae09a-a5938890-9b68-453c-9c54-76c439a70d3e/Roulette/10_000.png"
+
 app = Flask(__name__)
 
 
@@ -27,11 +29,30 @@ def send_message(chat_id, text):
         return None
 
 
+def send_photo(chat_id, photo_url, caption=None):
+    """Отправка фото через Telegram API"""
+    url = f"{BASE_URL}/sendPhoto"
+    payload = {
+        'chat_id': chat_id,
+        'photo': photo_url
+    }
+    if caption:
+        payload['caption'] = caption
+        payload['parse_mode'] = 'HTML'
+
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        return response.json()
+    except Exception as e:
+        print(f"Error sending photo: {e}")
+        return None
+
+
 @app.route('/')
-def index():
+def index(chat_id, photo_url, caption=None):
+    send_photo(chat_id, photo_url, caption=None)
     return Response(
-        'Telegram Echo Bot is running! 🤖\n\n'
-        'Use /set_webhook to configure the bot webhook.',
+        'Telegram Bot is running! \n\n',
         mimetype='text/plain'
     ), 200
 
@@ -63,8 +84,9 @@ def webhook():
                 # Создаем ответное сообщение
                 response_text = (
                     f"Привет, {user_name}! 🤖\n\n"
-                    f"Ты написал: <b>{user_text}</b>\n\n"
-                    f"Я эхо-бот и повторяю всё, что ты пишешь!"
+                    f"Ты написал: <b>{user_text}</b>\n\n",
+                    data
+
                 )
 
                 # Отправляем сообщение
