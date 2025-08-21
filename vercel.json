@@ -11,10 +11,5 @@
       "src": "/(.*)",
       "dest": "bot.py"
     }
-  ],
-  "functions": {
-    "bot.py": {
-      "runtime": "python3.9"
-    }
-  }
+  ]
 }
