@@ -68,6 +68,7 @@ def webhook():
 
         # Получаем данные от Telegram
         data = request.get_json()
+        print(data)
         if not data:
             return Response('No data', status=400)
 
@@ -84,9 +85,7 @@ def webhook():
                 # Создаем ответное сообщение
                 response_text = (
                     f"Привет, {user_name}! 🤖\n\n"
-                    f"Ты написал: <b>{user_text}</b>\n\n",
-                    data
-
+                    f"Ты написал: <b>{user_text}</b>\n\n"
                 )
 
                 # Отправляем сообщение
