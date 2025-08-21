@@ -4,7 +4,8 @@ import requests
 from flask import Flask, request
 
 # Настройка переменных окружения
-TOKEN = os.getenv('TELEGRAM_TOKEN')
+# TOKEN = os.getenv('TELEGRAM_TOKEN')
+TOKEN = '8315097557:AAH4xALNwTxjecuAxzyUbCdLrsDBxi2tWQc'
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 app = Flask(__name__)
