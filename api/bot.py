@@ -72,10 +72,10 @@ def set_webhook():
         # URL для вебхука
         vercel_url = os.getenv('VERCEL_URL')
         if vercel_url:
-            webhook_url = f"https://{vercel_url}/webhook"
+            webhook_url = f"https://{vercel_url}/api/webhook"
         else:
             host = request.headers.get('Host', 'your-vercel-project.vercel.app')
-            webhook_url = f"https://{host}/webhook"
+            webhook_url = f"https://{host}/api/webhook"
 
         # Устанавливаем вебхук с секретом
         response = requests.post(
@@ -142,7 +142,7 @@ def index():
     ), 200
 
 
-@app.route('/webhook', methods=['POST'])
+@app.route('/api/webhook', methods=['POST'])
 def webhook():
     try:
         # Проверка секретного токена (обязательно для Vercel + Telegram)
@@ -150,9 +150,15 @@ def webhook():
         expected_secret = os.getenv('WEBHOOK_SECRET_TOKEN')
 
         if not expected_secret:
-            # Если секрет не установлен, попробуем установить вебхук
             print("WEBHOOK_SECRET_TOKEN not found in environment")
-            return Response('Webhook not configured', status=500)
+            # Попробуем установить вебхук автоматически
+            try:
+                set_webhook()
+                return Response(
+                    'Webhook secret was missing, attempted to set up',
+                    status=500)
+            except:
+                return Response('Webhook not configured', status=500)
 
         if secret_token != expected_secret:
             print(
@@ -240,7 +246,7 @@ def webhook():
         return Response('Error', status=500)
 
 
-@app.route('/set_webhook', methods=['GET'])
+@app.route('/api/set_webhook', methods=['GET'])
 def setup_webhook():
     """Установка вебхука с секретом"""
     try:
@@ -278,7 +284,7 @@ def setup_webhook():
         ), 500
 
 
-@app.route('/get_webhook_info', methods=['GET'])
+@app.route('/api/get_webhook_info', methods=['GET'])
 def get_webhook_info():
     """Получение информации о вебхуке"""
     try:
@@ -299,7 +305,7 @@ def get_webhook_info():
         ), 500
 
 
-@app.route('/info', methods=['GET'])
+@app.route('/api/info', methods=['GET'])
 def info():
     """Информация о боте"""
     return Response(
@@ -314,10 +320,10 @@ def info():
             ],
             'image_url': IMAGE_URL,
             'endpoints': {
-                'webhook': '/webhook',
-                'set_webhook': '/set_webhook',
-                'get_webhook_info': '/get_webhook_info',
-                'info': '/info'
+                'webhook': '/api/webhook',
+                'set_webhook': '/api/set_webhook',
+                'get_webhook_info': '/api/get_webhook_info',
+                'info': '/api/info'
             },
             'webhook_secret_set': bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
         }, indent=2),
