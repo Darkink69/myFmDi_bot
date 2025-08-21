@@ -103,17 +103,18 @@ def index():
 
 
 # Основной обработчик для Vercel
-# def handler(event, context):
-#     from mangum import Mangum
-#     try:
-#         handler = Mangum(app)
-#         return handler(event, context)
-#     except Exception as e:
-#         print(f"Handler error: {e}")
-#         return {
-#             'statusCode': 500,
-#             'body': 'Internal Server Error'
-#         }
+def handler(event, context):
+    from mangum import Mangum
+    try:
+        handler = Mangum(app)
+        print(handler, 'handler!!')
+        return handler(event, context)
+    except Exception as e:
+        print(f"Handler error: {e}")
+        return {
+            'statusCode': 500,
+            'body': 'Internal Server Error'
+        }
 
 
 # Для локального тестирования
