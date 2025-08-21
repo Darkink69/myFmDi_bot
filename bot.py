@@ -1,7 +1,6 @@
 import os
 from flask import Flask, request, jsonify
 import requests
-import json
 
 # Настройка переменных окружения
 TOKEN = os.getenv(
@@ -19,13 +18,17 @@ def send_message(chat_id, text):
         'text': text,
         'parse_mode': 'HTML'
     }
-    response = requests.post(url, json=payload)
-    return response.json()
+    try:
+        response = requests.post(url, json=payload)
+        return response.json()
+    except Exception as e:
+        print(f"Error sending message: {e}")
+        return None
 
 
 @app.route('/')
 def index():
-    return 'Bot is running!', 200
+    return 'Telegram Echo Bot is running! 🤖', 200
 
 
 @app.route('/webhook', methods=['POST'])
@@ -35,7 +38,7 @@ def webhook():
         data = request.get_json()
 
         # Проверяем наличие сообщения
-        if 'message' in data:
+        if data and 'message' in data:
             message = data['message']
             chat_id = message['chat']['id']
 
@@ -61,14 +64,14 @@ def webhook():
 def set_webhook():
     """Установка вебхука"""
     try:
-        # URL для вебхука (замените на ваш Vercel URL)
-        webhook_url = f"https://{request.host}/webhook"
+        # URL для вебхука
+        webhook_url = f"https://{request.headers.get('Host')}/webhook"
 
         # Удаляем предыдущий вебхук
-        requests.get(f"{BASE_URL}/deleteWebhook")
+        delete_response = requests.get(f"{BASE_URL}/deleteWebhook")
 
         # Устанавливаем новый вебхук
-        response = requests.post(
+        set_response = requests.post(
             f"{BASE_URL}/setWebhook",
             json={'url': webhook_url}
         )
@@ -76,7 +79,8 @@ def set_webhook():
         return jsonify({
             'status': 'success',
             'webhook_url': webhook_url,
-            'telegram_response': response.json()
+            'delete_response': delete_response.json(),
+            'set_response': set_response.json()
         }), 200
 
     except Exception as e:
@@ -98,13 +102,21 @@ def info():
     }), 200
 
 
-# Обработчик для Vercel
+# Основной обработчик для Vercel
 def handler(event, context):
     from mangum import Mangum
-    handler = Mangum(app)
-    return handler(event, context)
+    try:
+        handler = Mangum(app)
+        return handler(event, context)
+    except Exception as e:
+        print(f"Handler error: {e}")
+        return {
+            'statusCode': 500,
+            'body': 'Internal Server Error'
+        }
 
 
+# Для локального тестирования
 if __name__ == "__main__":
-    # Для локального тестирования
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
