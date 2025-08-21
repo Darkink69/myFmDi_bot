@@ -161,7 +161,7 @@ def webhook():
 
         # Получаем данные от Telegram
         data = request.get_json()
-        if not
+        if not data:
             return Response('No data', status=400)
 
         # Обработка входящих сообщений
@@ -183,7 +183,7 @@ def webhook():
                 send_photo(chat_id, IMAGE_URL, caption, reply_markup)
 
         # Обработка callback-запросов от кнопок
-        elif 'callback_query' in
+        elif 'callback_query' in data:
             callback_query = data['callback_query']
             chat_id = callback_query['message']['chat']['id']
             callback_data = callback_query['data']
