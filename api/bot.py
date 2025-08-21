@@ -24,7 +24,7 @@ def send_message(chat_id, text, reply_markup=None):
         payload['reply_markup'] = reply_markup
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=15)
         return response.json()
     except Exception as e:
         print(f"Error sending message: {e}")
@@ -45,7 +45,7 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
         payload['reply_markup'] = reply_markup
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=15)
         return response.json()
     except Exception as e:
         print(f"Error sending photo: {e}")
@@ -55,36 +55,48 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
 def delete_webhook():
     """Удаление вебхука"""
     try:
-        response = requests.get(f"{BASE_URL}/deleteWebhook", timeout=10)
+        response = requests.get(f"{BASE_URL}/deleteWebhook", timeout=15)
         return response.json()
     except Exception as e:
         print(f"Error deleting webhook: {e}")
         return None
 
 
-def set_webhook_v2():
-    """Установка вебхука (V2)"""
+def set_webhook():
+    """Установка вебхука с секретом"""
     try:
+        # Генерируем секретный токен
+        import secrets
+        secret_token = secrets.token_urlsafe(32)
+
         # URL для вебхука
-        host = os.getenv('VERCEL_URL')
-        if host:
-            webhook_url = f"https://{host}/webhook"
+        vercel_url = os.getenv('VERCEL_URL')
+        if vercel_url:
+            webhook_url = f"https://{vercel_url}/webhook"
         else:
-            # Попробуем получить из заголовка
-            host = request.headers.get('Host', 'my-fm-di-bot.vercel.app')
+            host = request.headers.get('Host', 'your-vercel-project.vercel.app')
             webhook_url = f"https://{host}/webhook"
 
-        # Устанавливаем вебхук
+        # Устанавливаем вебхук с секретом
         response = requests.post(
             f"{BASE_URL}/setWebhook",
             json={
                 'url': webhook_url,
+                'secret_token': secret_token,
                 'allowed_updates': ['message', 'callback_query'],
                 'drop_pending_updates': True
             },
-            timeout=10
+            timeout=15
         )
-        return response.json()
+
+        # Сохраняем секрет в переменную окружения
+        os.environ['WEBHOOK_SECRET_TOKEN'] = secret_token
+
+        result = response.json()
+        result['webhook_url'] = webhook_url
+        result['secret_token'] = secret_token
+
+        return result
     except Exception as e:
         print(f"Error setting webhook: {e}")
         return None
@@ -125,7 +137,7 @@ def index():
     return Response(
         'Telegram Interactive Bot is running! 🤖\n\n'
         'Send /start to begin interaction.\n'
-        'The bot will send an image and interactive buttons.',
+        'The bot uses webhook with secret token for secure communication.',
         mimetype='text/plain'
     ), 200
 
@@ -133,6 +145,20 @@ def index():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
+        # Проверка секретного токена (обязательно для Vercel + Telegram)
+        secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+        expected_secret = os.getenv('WEBHOOK_SECRET_TOKEN')
+
+        if not expected_secret:
+            # Если секрет не установлен, попробуем установить вебхук
+            print("WEBHOOK_SECRET_TOKEN not found in environment")
+            return Response('Webhook not configured', status=500)
+
+        if secret_token != expected_secret:
+            print(
+                f"Unauthorized: expected {expected_secret}, got {secret_token}")
+            return Response('Unauthorized', status=401)
+
         # Получаем данные от Telegram
         data = request.get_json()
         if not
@@ -157,7 +183,7 @@ def webhook():
                 send_photo(chat_id, IMAGE_URL, caption, reply_markup)
 
         # Обработка callback-запросов от кнопок
-        elif 'callback_query' in data:
+        elif 'callback_query' in
             callback_query = data['callback_query']
             chat_id = callback_query['message']['chat']['id']
             callback_data = callback_query['data']
@@ -165,11 +191,14 @@ def webhook():
 
             # Отправляем ответ на callback
             ack_url = f"{BASE_URL}/answerCallbackQuery"
-            requests.post(ack_url, json={
-                'callback_query_id': callback_query['id'],
-                'text': 'Обработка...',
-                'show_alert': False
-            })
+            try:
+                requests.post(ack_url, json={
+                    'callback_query_id': callback_query['id'],
+                    'text': 'Обработка...',
+                    'show_alert': False
+                }, timeout=5)
+            except:
+                pass  # Игнорируем ошибки при ответе на callback
 
             # Обработка нажатий на кнопки
             if callback_data == 'more_info':
@@ -212,28 +241,37 @@ def webhook():
 
 
 @app.route('/set_webhook', methods=['GET'])
-def set_webhook():
-    """Установка вебхука без секрета"""
+def setup_webhook():
+    """Установка вебхука с секретом"""
     try:
         # Удаляем текущий вебхук
         delete_result = delete_webhook()
 
         # Устанавливаем новый вебхук
-        set_result = set_webhook_v2()
+        set_result = set_webhook()
 
-        return Response(
-            json.dumps({
-                'status': 'success',
-                'message': 'Webhook установлен успешно',
-                'delete_result': delete_result,
-                'set_result': set_result,
-                'image_url': IMAGE_URL
-            }, indent=2),
-            mimetype='application/json'
-        ), 200
+        if set_result and set_result.get('ok'):
+            return Response(
+                json.dumps({
+                    'status': 'success',
+                    'message': 'Webhook установлен успешно',
+                    'webhook_info': set_result,
+                    'secret_token_set': bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
+                }, indent=2),
+                mimetype='application/json'
+            ), 200
+        else:
+            return Response(
+                json.dumps({
+                    'status': 'error',
+                    'message': 'Не удалось установить вебхук',
+                    'details': set_result
+                }),
+                mimetype='application/json'
+            ), 500
 
     except Exception as e:
-        print(f"Error setting webhook: {e}")
+        print(f"Error in set_webhook: {e}")
         return Response(
             json.dumps({'status': 'error', 'message': str(e)}),
             mimetype='application/json'
@@ -244,9 +282,14 @@ def set_webhook():
 def get_webhook_info():
     """Получение информации о вебхуке"""
     try:
-        response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=10)
+        response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=15)
+        data = response.json()
+
+        # Добавляем информацию о секрете
+        data['our_secret_token'] = bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
+
         return Response(
-            json.dumps(response.json(), indent=2),
+            json.dumps(data, indent=2),
             mimetype='application/json'
         ), 200
     except Exception as e:
@@ -267,7 +310,7 @@ def info():
                 'Image sending on start',
                 'Inline keyboard buttons',
                 'Callback query processing',
-                'No webhook secret required'
+                'Webhook with secret token'
             ],
             'image_url': IMAGE_URL,
             'endpoints': {
@@ -275,7 +318,8 @@ def info():
                 'set_webhook': '/set_webhook',
                 'get_webhook_info': '/get_webhook_info',
                 'info': '/info'
-            }
+            },
+            'webhook_secret_set': bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
         }, indent=2),
         mimetype='application/json'
     ), 200
