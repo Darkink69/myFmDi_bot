@@ -10,11 +10,5 @@
       "source": "/webhook",
       "destination": "/api/webhook"
     }
-  ],
-  "builds": [
-    {
-      "src": "api/webhook.py",
-      "use": "@vercel/python"
-    }
   ]
 }
