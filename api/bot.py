@@ -12,8 +12,19 @@ IMAGE_URL = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
 app = Flask(__name__)
 
 # Глобальная переменная для секретного токена (так как переменные окружения в Vercel могут быть проблематичны)
-WEBHOOK_SECRET = secrets.token_urlsafe(32) if not os.getenv(
-    'WEBHOOK_SECRET_TOKEN') else os.getenv('WEBHOOK_SECRET_TOKEN')
+WEBHOOK_SECRET = None
+
+def get_webhook_secret():
+    """Получение или создание секретного токена"""
+    global WEBHOOK_SECRET
+    if WEBHOOK_SECRET is None:
+        # Пытаемся получить из переменных окружения
+        WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET_TOKEN')
+        if not WEBHOOK_SECRET:
+            # Генерируем новый токен
+            WEBHOOK_SECRET = secrets.token_urlsafe(32)
+            print(f"Generated new webhook secret: {WEBHOOK_SECRET}")
+    return WEBHOOK_SECRET
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -145,16 +156,22 @@ def webhook():
     try:
         # Проверка секретного токена
         secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+        expected_secret = get_webhook_secret()
 
-        if secret_token != WEBHOOK_SECRET:
+        print(f"Received secret: {secret_token}")
+        print(f"Expected secret: {expected_secret}")
+
+        if secret_token != expected_secret:
             print(
-                f"Unauthorized: expected {WEBHOOK_SECRET}, got {secret_token}")
+                f"Unauthorized: expected {expected_secret}, got {secret_token}")
             return Response('Unauthorized', status=401)
 
         # Получаем данные от Telegram
         data = request.get_json()
         if not data:
             return Response('No data', status=400)
+
+        print(f"Received data: {json.dumps(data, indent=2)}")
 
         # Обработка входящих сообщений
         if 'message' in data:
@@ -203,7 +220,7 @@ def webhook():
                     f"• Callback-запросы для обработки нажатий\n"
                     f"• Динамическое изменение интерфейса\n"
                     f"• Отправка медиа-контента\n\n"
-                    f"Бот может быть расширен для любых бизнес-задач!"
+                    f"Бot может быть расширен для любых бизнес-задач!"
                 )
                 send_message(chat_id, more_info_text)
 
@@ -237,9 +254,6 @@ def webhook():
 def setup_webhook():
     """Установка вебхука с секретом"""
     try:
-        # Удаляем текущий вебхук
-        delete_result = delete_webhook()
-
         # Устанавливаем новый вебхук
         set_result = set_webhook()
 
@@ -249,7 +263,7 @@ def setup_webhook():
                     'status': 'success',
                     'message': 'Webhook установлен успешно',
                     'webhook_info': set_result,
-                    'secret_token': WEBHOOK_SECRET
+                    'secret_token': get_webhook_secret()
                 }, indent=2),
                 mimetype='application/json'
             ), 200
