@@ -88,19 +88,19 @@ def index():
 #         return {'status': 'error', 'message': str(e)}, 500
 #
 #
-# @app.route('/info', methods=['GET'])
-# def info():
-#     """Информация о боте"""
-#     return {
-#         'bot': 'Telegram Echo Bot',
-#         'status': 'active',
-#         'features': ['Echo messages', 'Webhook support', 'Vercel deployment'],
-#         'endpoints': {
-#             'webhook': '/api/webhook',
-#             'set_webhook': '/api/set_webhook',
-#             'info': '/api/info'
-#         }
-#     }, 200
+@app.route('/info', methods=['GET'])
+def info():
+    """Информация о боте"""
+    return {
+        'bot': 'Telegram Echo Bot',
+        'status': 'active',
+        'features': ['Echo messages', 'Webhook support', 'Vercel deployment'],
+        'endpoints': {
+            'webhook': '/api/webhook',
+            'set_webhook': '/api/set_webhook',
+            'info': '/api/info'
+        }
+    }, 200
 
 
 # Убираем функцию handler - пусть Vercel сам обрабатывает Flask приложение
