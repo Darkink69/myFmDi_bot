@@ -49,8 +49,7 @@ def send_photo(chat_id, photo_url, caption=None):
 
 
 @app.route('/')
-def index(chat_id, photo_url, caption=None):
-    send_photo(chat_id, photo_url, caption=None)
+def index():
     return Response(
         'Telegram Bot is running! \n\n',
         mimetype='text/plain'
