@@ -52,6 +52,44 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
         return None
 
 
+def delete_webhook():
+    """Удаление вебхука"""
+    try:
+        response = requests.get(f"{BASE_URL}/deleteWebhook", timeout=10)
+        return response.json()
+    except Exception as e:
+        print(f"Error deleting webhook: {e}")
+        return None
+
+
+def set_webhook_v2():
+    """Установка вебхука (V2)"""
+    try:
+        # URL для вебхука
+        host = os.getenv('VERCEL_URL')
+        if host:
+            webhook_url = f"https://{host}/webhook"
+        else:
+            # Попробуем получить из заголовка
+            host = request.headers.get('Host', 'my-fm-di-bot.vercel.app')
+            webhook_url = f"https://{host}/webhook"
+
+        # Устанавливаем вебхук
+        response = requests.post(
+            f"{BASE_URL}/setWebhook",
+            json={
+                'url': webhook_url,
+                'allowed_updates': ['message', 'callback_query'],
+                'drop_pending_updates': True
+            },
+            timeout=10
+        )
+        return response.json()
+    except Exception as e:
+        print(f"Error setting webhook: {e}")
+        return None
+
+
 def get_main_menu_keyboard():
     """Клавиатура с двумя кнопками"""
     return {
@@ -86,8 +124,8 @@ def get_number_buttons_keyboard():
 def index():
     return Response(
         'Telegram Interactive Bot is running! 🤖\n\n'
-        'Bot sends an image on start and provides interactive buttons.\n'
-        'Uses callback queries for button interactions.',
+        'Send /start to begin interaction.\n'
+        'The bot will send an image and interactive buttons.',
         mimetype='text/plain'
     ), 200
 
@@ -95,15 +133,9 @@ def index():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
-        # Проверка авторизации через токен в заголовке
-        auth_header = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-        if auth_header != os.getenv('WEBHOOK_SECRET', ''):
-            print(f"Unauthorized access attempt: {auth_header}")
-            return Response('Unauthorized', status=401)
-
         # Получаем данные от Telegram
         data = request.get_json()
-        if not data:
+        if not
             return Response('No data', status=400)
 
         # Обработка входящих сообщений
@@ -128,15 +160,14 @@ def webhook():
         elif 'callback_query' in data:
             callback_query = data['callback_query']
             chat_id = callback_query['message']['chat']['id']
-            message_id = callback_query['message']['message_id']
             callback_data = callback_query['data']
             user_name = callback_query['from'].get('first_name', 'Пользователь')
 
-            # Отправляем ответ на callback (удаляет "часики" в Telegram)
+            # Отправляем ответ на callback
             ack_url = f"{BASE_URL}/answerCallbackQuery"
             requests.post(ack_url, json={
                 'callback_query_id': callback_query['id'],
-                'text': 'Обрабатываю запрос...',
+                'text': 'Обработка...',
                 'show_alert': False
             })
 
@@ -182,52 +213,43 @@ def webhook():
 
 @app.route('/set_webhook', methods=['GET'])
 def set_webhook():
-    """Установка вебхука с секретом"""
+    """Установка вебхука без секрета"""
     try:
-        # Генерируем случайный секрет
-        import secrets
-        secret_token = secrets.token_urlsafe(32)
-        os.environ['WEBHOOK_SECRET'] = secret_token
+        # Удаляем текущий вебхук
+        delete_result = delete_webhook()
 
-        # URL для вебхука
-        host = request.headers.get('Host')
-        if not host:
-            host = os.getenv('VERCEL_URL', 'your-vercel-project.vercel.app')
-
-        webhook_url = f"https://{host}/webhook"
-
-        # Удаляем предыдущий вебхук
-        delete_response = requests.get(
-            f"{BASE_URL}/deleteWebhook",
-            timeout=10
-        )
-
-        # Устанавливаем новый вебхук с секретом
-        set_response = requests.post(
-            f"{BASE_URL}/setWebhook",
-            json={
-                'url': webhook_url,
-                'secret_token': secret_token,
-                'allowed_updates': ['message', 'callback_query']
-            },
-            timeout=10
-        )
+        # Устанавливаем новый вебхук
+        set_result = set_webhook_v2()
 
         return Response(
             json.dumps({
                 'status': 'success',
-                'webhook_url': webhook_url,
-                'secret_token': 'HIDDEN_FOR_SECURITY',
-                'image_url': IMAGE_URL,
-                'allowed_updates': ['message', 'callback_query'],
-                'delete_response': delete_response.json() if delete_response.status_code == 200 else None,
-                'set_response': set_response.json() if set_response.status_code == 200 else None
+                'message': 'Webhook установлен успешно',
+                'delete_result': delete_result,
+                'set_result': set_result,
+                'image_url': IMAGE_URL
             }, indent=2),
             mimetype='application/json'
         ), 200
 
     except Exception as e:
         print(f"Error setting webhook: {e}")
+        return Response(
+            json.dumps({'status': 'error', 'message': str(e)}),
+            mimetype='application/json'
+        ), 500
+
+
+@app.route('/get_webhook_info', methods=['GET'])
+def get_webhook_info():
+    """Получение информации о вебхуке"""
+    try:
+        response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=10)
+        return Response(
+            json.dumps(response.json(), indent=2),
+            mimetype='application/json'
+        ), 200
+    except Exception as e:
         return Response(
             json.dumps({'status': 'error', 'message': str(e)}),
             mimetype='application/json'
@@ -245,17 +267,15 @@ def info():
                 'Image sending on start',
                 'Inline keyboard buttons',
                 'Callback query processing',
-                'Interactive menu system',
-                'Dynamic UI changes'
+                'No webhook secret required'
             ],
             'image_url': IMAGE_URL,
             'endpoints': {
                 'webhook': '/webhook',
                 'set_webhook': '/set_webhook',
+                'get_webhook_info': '/get_webhook_info',
                 'info': '/info'
-            },
-            'host': request.headers.get('Host'),
-            'vercel_url': os.getenv('VERCEL_URL')
+            }
         }, indent=2),
         mimetype='application/json'
     ), 200
