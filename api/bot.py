@@ -1,14 +1,19 @@
 import os
 import json
 import requests
+import secrets
 from flask import Flask, request, Response
 
 # Настройка переменных окружения
 TOKEN = os.getenv('TELEGRAM_TOKEN', 'YOUR_BOT_TOKEN')
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
-IMAGE_URL = "https://s3.twcstorage.ru/c6bae09a-a5938890-9b68-453c-9c54-76c439a70d3e/Roulette/10_000.png"
+IMAGE_URL = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
 
 app = Flask(__name__)
+
+# Глобальная переменная для секретного токена (так как переменные окружения в Vercel могут быть проблематичны)
+WEBHOOK_SECRET = secrets.token_urlsafe(32) if not os.getenv(
+    'WEBHOOK_SECRET_TOKEN') else os.getenv('WEBHOOK_SECRET_TOKEN')
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -65,36 +70,29 @@ def delete_webhook():
 def set_webhook():
     """Установка вебхука с секретом"""
     try:
-        # Генерируем секретный токен
-        import secrets
-        secret_token = secrets.token_urlsafe(32)
-
         # URL для вебхука
         vercel_url = os.getenv('VERCEL_URL')
         if vercel_url:
             webhook_url = f"https://{vercel_url}/api/webhook"
         else:
-            host = request.headers.get('Host', 'your-vercel-project.vercel.app')
-            webhook_url = f"https://{host}/api/webhook"
+            # Для локального тестирования
+            webhook_url = "https://your-vercel-project.vercel.app/api/webhook"
 
         # Устанавливаем вебхук с секретом
         response = requests.post(
             f"{BASE_URL}/setWebhook",
             json={
                 'url': webhook_url,
-                'secret_token': secret_token,
+                'secret_token': WEBHOOK_SECRET,
                 'allowed_updates': ['message', 'callback_query'],
                 'drop_pending_updates': True
             },
             timeout=15
         )
 
-        # Сохраняем секрет в переменную окружения
-        os.environ['WEBHOOK_SECRET_TOKEN'] = secret_token
-
         result = response.json()
         result['webhook_url'] = webhook_url
-        result['secret_token'] = secret_token
+        result['secret_token'] = WEBHOOK_SECRET
 
         return result
     except Exception as e:
@@ -145,24 +143,12 @@ def index():
 @app.route('/api/webhook', methods=['POST'])
 def webhook():
     try:
-        # Проверка секретного токена (обязательно для Vercel + Telegram)
+        # Проверка секретного токена
         secret_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-        expected_secret = os.getenv('WEBHOOK_SECRET_TOKEN')
 
-        if not expected_secret:
-            print("WEBHOOK_SECRET_TOKEN not found in environment")
-            # Попробуем установить вебхук автоматически
-            try:
-                set_webhook()
-                return Response(
-                    'Webhook secret was missing, attempted to set up',
-                    status=500)
-            except:
-                return Response('Webhook not configured', status=500)
-
-        if secret_token != expected_secret:
+        if secret_token != WEBHOOK_SECRET:
             print(
-                f"Unauthorized: expected {expected_secret}, got {secret_token}")
+                f"Unauthorized: expected {WEBHOOK_SECRET}, got {secret_token}")
             return Response('Unauthorized', status=401)
 
         # Получаем данные от Telegram
@@ -178,13 +164,11 @@ def webhook():
 
             # Проверяем команду /start
             if 'text' in message and message['text'] == '/start':
-                # Отправляем изображение с описанием и кнопками
                 caption = (
                     f"Добро пожаловать, {user_name}! 👋\n\n"
                     f"Этот бот демонстрирует интерактивное взаимодействие "
                     f"с помощью inline-кнопок и callback-запросов."
                 )
-
                 reply_markup = get_main_menu_keyboard()
                 send_photo(chat_id, IMAGE_URL, caption, reply_markup)
 
@@ -196,15 +180,18 @@ def webhook():
             user_name = callback_query['from'].get('first_name', 'Пользователь')
 
             # Отправляем ответ на callback
-            ack_url = f"{BASE_URL}/answerCallbackQuery"
             try:
-                requests.post(ack_url, json={
-                    'callback_query_id': callback_query['id'],
-                    'text': 'Обработка...',
-                    'show_alert': False
-                }, timeout=5)
+                requests.post(
+                    f"{BASE_URL}/answerCallbackQuery",
+                    json={
+                        'callback_query_id': callback_query['id'],
+                        'text': 'Обработка...',
+                        'show_alert': False
+                    },
+                    timeout=5
+                )
             except:
-                pass  # Игнорируем ошибки при ответе на callback
+                pass
 
             # Обработка нажатий на кнопки
             if callback_data == 'more_info':
@@ -262,7 +249,7 @@ def setup_webhook():
                     'status': 'success',
                     'message': 'Webhook установлен успешно',
                     'webhook_info': set_result,
-                    'secret_token_set': bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
+                    'secret_token': WEBHOOK_SECRET
                 }, indent=2),
                 mimetype='application/json'
             ), 200
@@ -290,10 +277,7 @@ def get_webhook_info():
     try:
         response = requests.get(f"{BASE_URL}/getWebhookInfo", timeout=15)
         data = response.json()
-
-        # Добавляем информацию о секрете
-        data['our_secret_token'] = bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
-
+        data['our_secret_token'] = WEBHOOK_SECRET
         return Response(
             json.dumps(data, indent=2),
             mimetype='application/json'
@@ -312,29 +296,21 @@ def info():
         json.dumps({
             'bot': 'Telegram Interactive Bot',
             'status': 'active',
-            'features': [
-                'Image sending on start',
-                'Inline keyboard buttons',
-                'Callback query processing',
-                'Webhook with secret token'
-            ],
-            'image_url': IMAGE_URL,
+            'webhook_secret': WEBHOOK_SECRET,
             'endpoints': {
                 'webhook': '/api/webhook',
                 'set_webhook': '/api/set_webhook',
                 'get_webhook_info': '/api/get_webhook_info',
                 'info': '/api/info'
-            },
-            'webhook_secret_set': bool(os.getenv('WEBHOOK_SECRET_TOKEN'))
+            }
         }, indent=2),
         mimetype='application/json'
     ), 200
 
 
-# Для Vercel - экспорт приложения
+# Для Vercel
 app_instance = app
 
-# Для локального тестирования
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=True, host='0.0.0.0', port=port)
