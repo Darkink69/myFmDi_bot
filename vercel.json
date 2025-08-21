@@ -1,38 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "*.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.1"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/webhook",
-      "dest": "bot.py",
-      "methods": ["POST"]
-    },
-    {
-      "src": "/set_webhook",
-      "dest": "bot.py",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/info",
-      "dest": "bot.py",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/",
-      "dest": "bot.py",
-      "methods": ["GET"]
-    }
-  ],
-  "env": {
-    "WEBHOOK_SECRET": "AUTO_GENERATED"
-  }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/bot" }
+  ]
 }
