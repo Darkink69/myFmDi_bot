@@ -1,7 +1,6 @@
 import os
 import json
 import requests
-import secrets
 from flask import Flask, request, Response
 
 # Настройка переменных окружения
@@ -13,26 +12,6 @@ BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 IMAGE_URL = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
 
 app = Flask(__name__)
-
-# Глобальная переменная для секретного токена
-# В production используйте базу данных или кэш
-_WEBHOOK_SECRET = None
-
-
-def get_webhook_secret():
-    """Получение или создание секретного токена"""
-    global _WEBHOOK_SECRET
-    if _WEBHOOK_SECRET is None:
-        # Пытаемся получить из переменных окружения
-        env_secret = os.getenv('WEBHOOK_SECRET_TOKEN')
-        if env_secret:
-            _WEBHOOK_SECRET = env_secret
-            print("Using webhook secret from environment")
-        else:
-            # Генерируем новый токен
-            _WEBHOOK_SECRET = secrets.token_urlsafe(32)
-            print(f"Generated new webhook secret: {_WEBHOOK_SECRET}")
-    return _WEBHOOK_SECRET
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -90,27 +69,23 @@ def delete_webhook():
 
 
 def set_webhook():
-    """Установка вебхука с секретом"""
+    """Установка вебхука без секретного токена"""
     try:
-        secret_token = get_webhook_secret()
-
         # Определяем URL для вебхука
         vercel_url = os.getenv('VERCEL_URL')
         if vercel_url:
             webhook_url = f"https://{vercel_url}/api/webhook"
         else:
             # Если VERCEL_URL не установлен, используем заглушку
-            webhook_url = "https://your-project.vercel.app/api/webhook"
+            webhook_url = "https://my-fm-di-bot.vercel.app/api/webhook"
 
         print(f"Setting webhook to: {webhook_url}")
-        print(f"Using secret token: {secret_token}")
 
-        # Устанавливаем вебхук
+        # Устанавливаем вебхук БЕЗ секретного токена
         response = requests.post(
             f"{BASE_URL}/setWebhook",
             json={
                 'url': webhook_url,
-                'secret_token': secret_token,
                 'allowed_updates': ['message', 'callback_query'],
                 'drop_pending_updates': True
             },
@@ -187,16 +162,8 @@ def index():
 def webhook_handler():
     """Основной обработчик вебхука от Telegram"""
     try:
-        # Проверка секретного токена
-        incoming_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-        expected_secret = get_webhook_secret()
-
-        print(f"Incoming secret: {incoming_secret}")
-        print(f"Expected secret: {expected_secret}")
-
-        if not incoming_secret or incoming_secret != expected_secret:
-            print("Unauthorized webhook request")
-            return Response('Unauthorized', status=401)
+        # Без проверки секретного токена - принимаем все запросы
+        print("Webhook request received")
 
         # Получаем данные от Telegram
         data = request.get_json()
@@ -285,13 +252,13 @@ def webhook_handler():
 
 @app.route('/api/set_webhook', methods=['GET', 'POST'])
 def setup_webhook():
-    """Установка вебхука"""
+    """Установка вебхука без секретного токена"""
     try:
         # Сначала удаляем старый вебхук
         delete_result = delete_webhook()
         print(f"Delete webhook result: {delete_result}")
 
-        # Устанавливаем новый вебхук
+        # Устанавливаем новый вебхук БЕЗ секретного токена
         set_result = set_webhook()
 
         if set_result and set_result.get('ok'):
@@ -299,11 +266,10 @@ def setup_webhook():
             return Response(
                 json.dumps({
                     'status': 'success',
-                    'message': 'Webhook установлен успешно',
+                    'message': 'Webhook установлен успешно (без секретного токена)',
                     'set_result': set_result,
                     'webhook_info': webhook_info,
-                    'secret_token': get_webhook_secret(),
-                    'note': 'Сохраните этот secret_token для отладки'
+                    'note': 'Секретный токен отключен - все запросы принимаются'
                 }, indent=2, ensure_ascii=False),
                 mimetype='application/json'
             ), 200
@@ -312,8 +278,7 @@ def setup_webhook():
                 json.dumps({
                     'status': 'error',
                     'message': 'Не удалось установить вебхук',
-                    'details': set_result,
-                    'secret_token': get_webhook_secret()
+                    'details': set_result
                 }, indent=2),
                 mimetype='application/json'
             ), 500
@@ -323,8 +288,7 @@ def setup_webhook():
         return Response(
             json.dumps({
                 'status': 'error',
-                'message': str(e),
-                'secret_token': get_webhook_secret()
+                'message': str(e)
             }),
             mimetype='application/json'
         ), 500
@@ -335,12 +299,11 @@ def webhook_info():
     """Получение информации о вебхуке"""
     try:
         info = get_webhook_info()
-        current_secret = get_webhook_secret()
 
         response_data = {
             'webhook_info': info,
-            'our_secret_token': current_secret,
-            'status': 'success'
+            'status': 'success',
+            'note': 'Секретный токен отключен'
         }
 
         return Response(
@@ -355,6 +318,26 @@ def webhook_info():
         ), 500
 
 
+@app.route('/api/delete_webhook', methods=['GET'])
+def delete_webhook_route():
+    """Удаление вебхука"""
+    try:
+        result = delete_webhook()
+        return Response(
+            json.dumps({
+                'status': 'success',
+                'message': 'Webhook удален',
+                'result': result
+            }, indent=2),
+            mimetype='application/json'
+        ), 200
+    except Exception as e:
+        return Response(
+            json.dumps({'status': 'error', 'message': str(e)}),
+            mimetype='application/json'
+        ), 500
+
+
 @app.route('/api/status', methods=['GET'])
 def status():
     """Статус бота"""
@@ -362,11 +345,12 @@ def status():
         json.dumps({
             'status': 'active',
             'bot_token_set': bool(TOKEN),
-            'webhook_secret_set': bool(get_webhook_secret()),
+            'webhook_secret': 'disabled',
             'endpoints': {
                 'webhook': '/api/webhook',
                 'set_webhook': '/api/set_webhook',
                 'webhook_info': '/api/webhook_info',
+                'delete_webhook': '/api/delete_webhook',
                 'status': '/api/status'
             }
         }, indent=2),
@@ -386,5 +370,5 @@ app_instance = app
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     print(f"Starting server on port {port}")
-    print(f"Webhook secret: {get_webhook_secret()}")
+    print("Webhook secret: DISABLED")
     app.run(debug=True, host='0.0.0.0', port=port)
