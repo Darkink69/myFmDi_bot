@@ -64,24 +64,6 @@ def get_main_menu_keyboard():
     }
 
 
-def get_number_buttons_keyboard():
-    """Клавиатура с 6 кнопками"""
-    return {
-        'inline_keyboard': [
-            [
-                {'text': 'Один', 'callback_data': 'number_1'},
-                {'text': 'Два', 'callback_data': 'number_2'},
-                {'text': 'Три', 'callback_data': 'number_3'}
-            ],
-            [
-                {'text': 'Четыре', 'callback_data': 'number_4'},
-                {'text': 'Пять', 'callback_data': 'number_5'},
-                {'text': 'Шесть', 'callback_data': 'number_6'}
-            ]
-        ]
-    }
-
-
 @app.route('/app/bot', methods=['POST'])
 def webhook():
     """Обработчик вебхука - простой эхо-бот"""
@@ -110,58 +92,7 @@ def webhook():
             elif text:
                 send_message(chat_id, f"Вы сказали: {text}")
 
-            # Обработка callback-запросов от кнопок
-            elif 'callback_query' in data:
-                callback_query = data['callback_query']
-                chat_id = callback_query['message']['chat']['id']
-                message_id = callback_query['message']['message_id']
-                callback_data = callback_query['data']
-                user_name = callback_query['from'].get('first_name',
-                                                       'Пользователь')
-
-            # Отправляем ответ на callback (удаляет "часики" в Telegram)
-            # ack_url = f"{BASE_URL}/answerCallbackQuery"
-            # requests.post(ack_url, json={
-            #     'callback_query_id': callback_query['id'],
-            #     'text': 'Обрабатываю запрос...',
-            #     'show_alert': False
-            # })
-
-            # Обработка нажатий на кнопки
-            if callback_data == 'more_info':
-                more_info_text = (
-                    f"🔍 <b>Подробная информация</b>\n\n"
-                    f"Этот бот предназначен для демонстрации возможностей "
-                    f"интерактивного взаимодействия в Telegram.\n\n"
-                    f"• Используются inline-кнопки для навигации\n"
-                    f"• Callback-запросы для обработки нажатий\n"
-                    f"• Динамическое изменение интерфейса\n"
-                    f"• Отправка медиа-контента\n\n"
-                    f"Бот может быть расширен для любых бизнес-задач!"
-                )
-                send_message(chat_id, more_info_text)
-
-            elif callback_data == 'start_action':
-                numbers_text = (
-                    f"🔢 <b>Выберите число</b>\n\n"
-                    f"Нажмите на одну из шести кнопок ниже, "
-                    f"чтобы выбрать интересующий вас вариант."
-                )
-                reply_markup = get_number_buttons_keyboard()
-                send_message(chat_id, numbers_text, reply_markup)
-
-            elif callback_data.startswith('number_'):
-                number = callback_data.split('_')[1]
-                response_text = (
-                    f"✅ Вы выбрали число: <b>{number}</b>\n\n"
-                    f"Это демонстрация обработки нажатий на кнопки. "
-                    f"В реальном приложении здесь могла бы быть "
-                    f"любая логика в зависимости от выбора пользователя."
-                )
-                send_message(chat_id, response_text)
-
-        return Response('ok', status=200, mimetype='text/plain')
-
+        return Response('ok', status=200)
 
     except Exception as e:
         print(f"Error: {e}")
