@@ -49,7 +49,6 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
 
     try:
         response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
         return response.json()
     except Exception as e:
         print(f"Error sending photo: {e}")
@@ -69,7 +68,7 @@ def answer_callback_query(callback_query_id):
 
 
 def get_main_menu_keyboard():
-
+    """Клавиатура с кнопками"""
     return {
         'inline_keyboard': [
             [
@@ -122,14 +121,15 @@ def webhook():
                 user_name = message['from'].get('first_name', 'Пользователь')
                 caption = (
                     f"Привет {user_name}! 👋\n\n"
-                    f"Я помогу скачать вам весь архив mp3 файлов всех каналов, всех сайтов холдинга DI.FM\n\n"
+                    f"Я помогу скачать вам все архивы mp3-файлов всех каналов, всех сайтов холдинга DI.FM\n\n"
                     f"Нажмите «Подробнее», если хотите узнать, для чего все это. Нажмите «Начать», если уже знаете."
                 )
                 reply_markup = get_main_menu_keyboard()
                 send_photo(chat_id, photo_url, caption, reply_markup)
+                return Response('ok', status=200)
 
         # Обработка callback-запросов от кнопок
-        elif 'callback_query' in data:
+        if 'callback_query' in data:
             callback_query = data['callback_query']
             chat_id = callback_query['message']['chat']['id']
             callback_data = callback_query['data']
@@ -142,12 +142,12 @@ def webhook():
             if callback_data == 'more_info':
                 # Текст с разными шрифтами
                 more_info_text = (
-                    "<b>🎵 Детальная информация</b>\n\n"
+                    "🎵 <b>Детальная информация</b>\n\n"
                     "<i>Этот бот создан для настоящих ценителей музыки!</i>\n\n"
-                    "<code>• Скачивайте архивы mp3 файлов</code>\n"
-                    "<pre>• Все каналы DI.FM холдинга</pre>\n"
-                    "<b>• Высокое качество звука</b>\n"
-                    "<i>• Регулярные обновления баз</i>\n\n"
+                    "• Скачивайте архивы mp3 файлов\n"
+                    "• Все каналы DI.FM холдинга\n"
+                    "• Высокое качество звука\n"
+                    "• Регулярные обновления баз\n\n"
                     "<u>Возможности:</u>\n"
                     "✓ DI.FM\n"
                     "✓ RockRadio.com\n"
@@ -158,6 +158,7 @@ def webhook():
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
                 send_photo(chat_id, photo_url, more_info_text)
+                return Response('ok', status=200)
 
             elif callback_data == 'start_action':
                 start_text = (
@@ -166,36 +167,44 @@ def webhook():
                 )
                 reply_markup = get_radio_keyboard()
                 send_message(chat_id, start_text, reply_markup)
+                return Response('ok', status=200)
 
             # Обработка выбора радиостанций
             elif callback_data == 'radio_di':
                 send_message(chat_id,
                              "Вы выбрали: <b>DI</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
             elif callback_data == 'radio_rockradio':
                 send_message(chat_id,
                              "Вы выбрали: <b>Rockradio</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
             elif callback_data == 'radio_radiotunes':
                 send_message(chat_id,
                              "Вы выбрали: <b>Radiotunes</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
             elif callback_data == 'radio_jazzradio':
                 send_message(chat_id,
                              "Вы выбрали: <b>Jazzradio</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
             elif callback_data == 'radio_classicalradio':
                 send_message(chat_id,
                              "Вы выбрали: <b>Classicalradio</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
             elif callback_data == 'radio_zenradio':
                 send_message(chat_id,
                              "Вы выбрали: <b>Zenradio</b>\n\nСкачивание архива начато...")
+                return Response('ok', status=200)
 
+        # Если не обработали другие случаи, возвращаем ok
         return Response('ok', status=200)
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in webhook: {e}")
         return Response('Error', status=500)
 
 
@@ -212,7 +221,6 @@ def set_webhook():
             json={
                 'url': webhook_url,
                 'allowed_updates': ['message', 'callback_query']
-                # Добавляем поддержку callback
             },
             timeout=15
         )
