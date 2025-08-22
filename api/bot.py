@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from flask import Flask, request, Response
 
 # Настройка переменных окружения
@@ -8,6 +9,7 @@ if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN environment variable is required")
 
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
+photo_url = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
 
 app = Flask(__name__)
 
@@ -25,6 +27,28 @@ def send_message(chat_id, text):
         return response.json()
     except Exception as e:
         print(f"Error sending message: {e}")
+        return None
+
+
+def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
+    """Отправка фото через Telegram API"""
+    url = f"{BASE_URL}/sendPhoto"
+    payload = {
+        'chat_id': chat_id,
+        'photo': photo_url
+    }
+    if caption:
+        payload['caption'] = caption
+        payload['parse_mode'] = 'HTML'
+    if reply_markup:
+        payload['reply_markup'] = json.dumps(reply_markup)
+
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error sending photo: {e}")
         return None
 
 
@@ -48,6 +72,8 @@ def webhook():
             if text == '/start':
                 send_message(chat_id,
                              "Привет! Я эхо-бот. Просто напиши мне что-нибудь, и я повторю это.")
+                send_photo(chat_id, photo_url)
+
             elif text:
                 send_message(chat_id, f"Вы сказали: {text}")
 
