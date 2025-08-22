@@ -28,7 +28,7 @@ def send_message(chat_id, text):
         return None
 
 
-@app.route('/api/webhook', methods=['POST'])
+@app.route('/app/bot', methods=['POST'])
 def webhook():
     """Обработчик вебхука - простой эхо-бот"""
     try:
@@ -58,13 +58,13 @@ def webhook():
         return Response('Error', status=500)
 
 
-@app.route('/api/set_webhook', methods=['GET'])
+@app.route('/app/set_webhook', methods=['GET'])
 def set_webhook():
     """Установка вебхука"""
     try:
         # Получаем URL вебхука
-        vercel_url = os.getenv('VERCEL_URL', 'your-project.vercel.app')
-        webhook_url = f"https://{vercel_url}/api/webhook"
+        vercel_url = os.getenv('VERCEL_URL', 'my-fm-di-bot.vercel.app')
+        webhook_url = f"https://{vercel_url}/app/bot"
 
         print(f"Setting webhook to: {webhook_url}")
 
@@ -90,7 +90,7 @@ def set_webhook():
         return Response(f"Error: {e}", status=500)
 
 
-@app.route('/api/delete_webhook', methods=['GET'])
+@app.route('/app/delete_webhook', methods=['GET'])
 def delete_webhook():
     """Удаление вебхука"""
     try:
@@ -103,7 +103,7 @@ def delete_webhook():
 
 @app.route('/')
 def index():
-    return "Telegram Echo Bot is running! Use /api/set_webhook to setup"
+    return "Telegram Echo Bot is running! Use /app/set_webhook to setup"
 
 
 # Для Vercel
