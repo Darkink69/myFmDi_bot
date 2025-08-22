@@ -52,6 +52,18 @@ def send_photo(chat_id, photo_url, caption=None, reply_markup=None):
         return None
 
 
+def get_main_menu_keyboard():
+    """Клавиатура с двумя кнопками"""
+    return {
+        'inline_keyboard': [
+            [
+                {'text': 'Начать', 'callback_data': 'start_action'},
+                {'text': 'Подробнее', 'callback_data': 'more_info'}
+            ]
+        ]
+    }
+
+
 @app.route('/app/bot', methods=['POST'])
 def webhook():
     """Обработчик вебхука - простой эхо-бот"""
@@ -70,9 +82,12 @@ def webhook():
             text = message.get('text', '')
 
             if text == '/start':
+                user_name = message['from'].get('first_name', 'Пользователь')
                 send_message(chat_id,
-                             "Привет! Я эхо-бот. Просто напиши мне что-нибудь, и я повторю это.")
+                             f"Привет {user_name}! Я помогу скачать вам весь архив mp3 файлов всех каналов, всех сайтов холдинга DI.FM\n\n"
+                             f"Нажмите «Подробнее», если хотите узнать, для чего все это. Нажмите «Начать», если уже знаете.")
                 send_photo(chat_id, photo_url)
+                reply_markup = get_main_menu_keyboard()
 
             elif text:
                 send_message(chat_id, f"Вы сказали: {text}")
