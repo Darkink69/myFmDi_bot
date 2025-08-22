@@ -168,7 +168,8 @@ def webhook():
                     "✓ ZenRadio.com\n\n"
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
-                send_photo(chat_id, photo_url, more_info_text)
+                send_photo(chat_id, photo_url)
+                send_message(chat_id, more_info_text)
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
