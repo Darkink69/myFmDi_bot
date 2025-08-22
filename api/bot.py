@@ -63,8 +63,9 @@ def set_webhook():
     """Установка вебхука"""
     try:
         # Получаем URL вебхука
-        vercel_url = os.getenv('VERCEL_URL', 'my-fm-di-bot.vercel.app')
-        webhook_url = f"https://{vercel_url}/app/bot"
+        # vercel_url = os.getenv('VERCEL_URL', 'my-fm-di-bot.vercel.app')
+        # webhook_url = f"https://{vercel_url}/app/bot"
+        webhook_url = f"https://my-fm-di-bot.vercel.app/app/bot"
 
         print(f"Setting webhook to: {webhook_url}")
 
