@@ -169,8 +169,10 @@ def webhook():
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
                 # Отправляем картинку с текстом и кнопками
+
+                send_photo(chat_id, photo2_url)
+                send_message(chat_id, more_info_text)
                 reply_markup = get_main_menu_keyboard()
-                send_photo(chat_id, photo2_url, more_info_text, reply_markup)
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
