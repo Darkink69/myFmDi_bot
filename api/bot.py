@@ -10,6 +10,7 @@ if not TOKEN:
 
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 photo_url = "https://4pda.to/s/PXticcA7C2YgYaRJl9z1jCUxDne0Bcrj7uxw.png"
+photo2_url = "https://www.di.fm/assets/plans/feature_graphics/curation@2x-30d8902e54fdae9fa63694ebb591ded0f481103a5b6c652b238b4ac58b849a9b.png"
 
 app = Flask(__name__)
 
@@ -168,9 +169,9 @@ def webhook():
                     "✓ ZenRadio.com\n\n"
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
-                send_photo(chat_id, photo_url)
+                send_photo(chat_id, photo2_url)
                 send_message(chat_id, more_info_text)
-                reply_markup = get_main_menu_keyboard()
+                get_main_menu_keyboard()
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
