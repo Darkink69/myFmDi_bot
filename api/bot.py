@@ -85,17 +85,17 @@ def get_radio_keyboard():
     return {
         'inline_keyboard': [
             [
-                {'text': 'DI', 'callback_data': 'radio_di'},
-                {'text': 'Rockradio', 'callback_data': 'radio_rockradio'}
+                {'text': 'DI', 'callback_data': 'di'},
+                {'text': 'Rockradio', 'callback_data': 'rockradio'}
             ],
             [
-                {'text': 'Radiotunes', 'callback_data': 'radio_radiotunes'},
-                {'text': 'Jazzradio', 'callback_data': 'radio_jazzradio'}
+                {'text': 'Radiotunes', 'callback_data': 'radiotunes'},
+                {'text': 'Jazzradio', 'callback_data': 'jazzradio'}
             ],
             [
                 {'text': 'Classicalradio',
-                 'callback_data': 'radio_classicalradio'},
-                {'text': 'Zenradio', 'callback_data': 'radio_zenradio'}
+                 'callback_data': 'classicalradio'},
+                {'text': 'Zenradio', 'callback_data': 'zenradio'}
             ]
         ]
     }
@@ -169,10 +169,10 @@ def webhook():
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
                 # Отправляем картинку с текстом и кнопками
-
-                send_photo(chat_id, photo2_url)
-                send_message(chat_id, more_info_text)
                 reply_markup = get_main_menu_keyboard()
+                send_photo(chat_id, photo2_url, more_info_text, reply_markup)
+                # send_message(chat_id, more_info_text)
+
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
@@ -185,15 +185,15 @@ def webhook():
                 return Response('ok', status=200)
 
             # Обработка выбора радиостанций через цикл
-            elif callback_data.startswith('radio_'):
+            elif callback_data():
                 # Словарь с названиями радиостанций
                 radio_names = {
-                    'radio_di': 'DI',
-                    'radio_rockradio': 'Rockradio',
-                    'radio_radiotunes': 'Radiotunes',
-                    'radio_jazzradio': 'Jazzradio',
-                    'radio_classicalradio': 'Classicalradio',
-                    'radio_zenradio': 'Zenradio'
+                    'di': 'DI',
+                    'rockradio': 'Rockradio',
+                    'radiotunes': 'Radiotunes',
+                    'jazzradio': 'Jazzradio',
+                    'classicalradio': 'Classicalradio',
+                    'zenradio': 'Zenradio'
                 }
 
                 # Получаем название радиостанции из callback_data
