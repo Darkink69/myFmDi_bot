@@ -168,15 +168,9 @@ def webhook():
                     "✓ ZenRadio.com\n\n"
                     "<b>Наслаждайтесь музыкой без ограничений! 🎶</b>"
                 )
-                # Отправляем картинку
-                send_photo(chat_id, photo2_url)
-                # Отправляем текст с кнопками
-                final_text = (
-                    "Что вы хотите сделать дальше?\n\n"
-                    "Нажмите «Подробнее», если хотите перечитать информацию. Нажмите «Начать», если готовы выбрать радиостанцию."
-                )
+                # Отправляем картинку с текстом и кнопками
                 reply_markup = get_main_menu_keyboard()
-                send_message(chat_id, final_text, reply_markup)
+                send_photo(chat_id, photo2_url, more_info_text, reply_markup)
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
@@ -188,35 +182,23 @@ def webhook():
                 send_message(chat_id, start_text, reply_markup)
                 return Response('ok', status=200)
 
-            # Обработка выбора радиостанций
-            elif callback_data == 'radio_di':
-                send_message(chat_id,
-                             "Вы выбрали: <b>DI</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
-                return Response('ok', status=200)
+            # Обработка выбора радиостанций через цикл
+            elif callback_data.startswith('radio_'):
+                # Словарь с названиями радиостанций
+                radio_names = {
+                    'radio_di': 'DI',
+                    'radio_rockradio': 'Rockradio',
+                    'radio_radiotunes': 'Radiotunes',
+                    'radio_jazzradio': 'Jazzradio',
+                    'radio_classicalradio': 'Classicalradio',
+                    'radio_zenradio': 'Zenradio'
+                }
 
-            elif callback_data == 'radio_rockradio':
-                send_message(chat_id,
-                             "Вы выбрали: <b>Rockradio</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
-                return Response('ok', status=200)
+                # Получаем название радиостанции из callback_data
+                radio_name = radio_names.get(callback_data, 'радиостанцию')
 
-            elif callback_data == 'radio_radiotunes':
                 send_message(chat_id,
-                             "Вы выбрали: <b>Radiotunes</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
-                return Response('ok', status=200)
-
-            elif callback_data == 'radio_jazzradio':
-                send_message(chat_id,
-                             "Вы выбрали: <b>Jazzradio</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
-                return Response('ok', status=200)
-
-            elif callback_data == 'radio_classicalradio':
-                send_message(chat_id,
-                             "Вы выбрали: <b>Classicalradio</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
-                return Response('ok', status=200)
-
-            elif callback_data == 'radio_zenradio':
-                send_message(chat_id,
-                             "Вы выбрали: <b>Zenradio</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
+                             f"Вы выбрали: <b>{radio_name}</b>\n\nВторой шаг - выберете интересующую вас радиостанцию:")
                 return Response('ok', status=200)
 
         # Если не обработали другие случаи, возвращаем ok
