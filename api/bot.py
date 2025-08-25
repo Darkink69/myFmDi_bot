@@ -93,8 +93,7 @@ def get_radio_keyboard():
                 {'text': 'Jazzradio', 'callback_data': 'jazzradio'}
             ],
             [
-                {'text': 'Classicalradio',
-                 'callback_data': 'classicalradio'},
+                {'text': 'Classicalradio', 'callback_data': 'classicalradio'},
                 {'text': 'Zenradio', 'callback_data': 'zenradio'}
             ]
         ]
@@ -170,9 +169,9 @@ def webhook():
                 )
                 # Отправляем картинку с текстом и кнопками
                 reply_markup = get_main_menu_keyboard()
-                send_photo(chat_id, photo2_url, more_info_text, reply_markup)
-                # send_message(chat_id, more_info_text)
-
+                result = send_photo(chat_id, photo2_url, more_info_text,
+                                    reply_markup)
+                print(f"Photo send result: {result}")
                 return Response('ok', status=200)
 
             elif callback_data == 'start_action':
@@ -185,7 +184,8 @@ def webhook():
                 return Response('ok', status=200)
 
             # Обработка выбора радиостанций через цикл
-            elif callback_data():
+            elif callback_data in ['di', 'rockradio', 'radiotunes', 'jazzradio',
+                                   'classicalradio', 'zenradio']:
                 # Словарь с названиями радиостанций
                 radio_names = {
                     'di': 'DI',
